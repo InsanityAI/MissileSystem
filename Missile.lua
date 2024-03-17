@@ -1,9 +1,15 @@
 if Debug then Debug.beginFile "MissileSystem/Missile" end
 OnInit.module("MissileSystem/Missile", function(require)
-    require "MissileSystem/MissileMovements"
-
     -- Note: properties marked as readonly should NOT be set to some other value explicitly.
     --      Otherwise, the system will do weird stuff. You have been warned!
+
+    ---@enum CollideZMode
+    CollideZMode = {
+        NONE = 1,  -- does not check height for collisions, nor be aware of height deformities in terrain
+        SAFE = 2,  -- uses safe but often imprecise methods to figure out height collision (sometimes not possible or lacking, like with Destructables)
+        UNSAFE = 3 -- uses GetLocationZ and other async methods (Caution: may cause desyncs!)
+    }
+    local DEFAULT_Z_MODE = CollideZMode.NONE
 
     ---@class Missile
     ---@field owner player readonly
@@ -46,37 +52,35 @@ OnInit.module("MissileSystem/Missile", function(require)
     ---
     --- Handlers
     ---     Only 1 handler of each type can be attached to the missile
-    ---
-    ---@field onUnit? fun(missile: Missile, unit: unit, delay: number): boolean
-    ---@field onMissile? fun(missile: Missile, collidedMissile: Missile, delay: number): boolean
-    ---@field onDestructable? fun(missile: Missile, destructable: destructable, delay: number): boolean
-    ---@field onItem? fun(missile:Missile, item: item, delay: number): boolean
-    ---@field onCliff? fun(missile: Missile, cliffDelta: number, delay: number): boolean
-    ---@field onTerrain? fun(missile: Missile, delay: number): boolean
-    ---@field onProcess? fun(missile: Missile, delay: number): boolean
-    ---@field onFinish? fun(missile: Missile, delay: number): boolean
-    ---@field onBoundaries? fun(missile: Missile, delay: number): boolean
-    ---@field onPause? fun(missile: Missile): boolean
-    ---@field onResume? fun(missile: Missile): boolean
+    ---@field onUnit? fun(missile: Missile, unit: unit, delay: number)
+    ---@field onMissile? fun(missile: Missile, collidedMissile: Missile, delay: number)
+    ---@field onDestructable? fun(missile: Missile, destructable: destructable, delay: number)
+    ---@field onItem? fun(missile:Missile, item: item, delay: number)
+    ---@field onCliff? fun(missile: Missile, cliffDelta: number, delay: number)
+    ---@field onTerrain? fun(missile: Missile, delay: number)
+    ---@field onProcess? fun(missile: Missile, delay: number)
+    ---@field onBoundaries? fun(missile: Missile, delay: number)
+    ---@field onPause? fun(missile: Missile)
+    ---@field onResume? fun(missile: Missile)
     ---@field onDestroy? fun(missile: Missile)
     Missile = {}
     Missile.__index = Missile
 
-    ---@enum CollideZMode
-    CollideZMode = {
-        NONE = 1,  -- does not check height for collisions (Default missile behavior)
-        SAFE = 2,  -- uses safe but often imprecise methods to figure out height collision (sometimes not possible or lacking, like with Destructables)
-        UNSAFE = 3 -- uses GetLocationZ and other async methods (Caution: may cause desyncs!)
-    }
-
     ---@param owner player
     ---@param originX number
     ---@param originY number
-    ---@param originZ number?
+    ---@param originZ number? if collideZ is UNSAFE, this is absolute value, otherwise it's treated as offset from ground level
     ---@param groundAngle number? default is bj_UNIT_FACING
     ---@param heightAngle number? default is 0
+    ---@param collideZ CollideZMode? if undefined uses default
     ---@return Missile
-    function Missile.create(owner, originX, originY, originZ, groundAngle, heightAngle)
+    function Missile.create(owner, originX, originY, originZ, groundAngle, heightAngle, collideZ)
+        collideZ = collideZ or DEFAULT_Z_MODE
+        originZ = originZ or 0
+        if collideZ ~= CollideZMode.UNSAFE then
+            originZ = (GetTerrainCliffLevel(originX, originY) - 2) * bj_CLIFFHEIGHT + originZ
+        end
+
         return setmetatable({
             owner = owner,
             destroyed = false,
@@ -89,7 +93,7 @@ OnInit.module("MissileSystem/Missile", function(require)
             heightAngle = heightAngle or 0,
             visionRange = 0,
             collisionSize = 0,
-            collideZ = CollideZMode.NONE,
+            collideZ = collideZ,
             collidedUnits = Set.create(),
             collidedMissiles = Set.create(),
             collidedDestructables = Set.create(),
@@ -143,6 +147,36 @@ OnInit.module("MissileSystem/Missile", function(require)
         elseif self.timedLifeTask then
             TimerQueue:cancel(self.timedLifeTask)
         end
+    end
+
+    local dx, dy ---@type number, number
+    local distance ---@type number
+    local heightAngle ---@type number?
+
+    ---@overload fun(self: Missile, target: widget, z: number?)
+    ---@param x number
+    ---@param y number
+    ---@param z number? if collideZ is not UNSAFE, treat this value as offset from ground
+    function Missile:orientTowards(x, y, z)
+        if type(x) ~= 'number' then
+            if y then
+                z = y
+            end
+            y = GetWidgetY(x)
+            x = GetWidgetX(x)
+        end
+
+        dx, dy = x - self.missileX, y - self.missileY
+        distance = (dx ^ 2 + dy ^ 2) ^ 0.5
+        if z then
+            if self.collideZ ~= CollideZMode.UNSAFE then
+                z = (GetTerrainCliffLevel(x, y) - 2) * bj_CLIFFHEIGHT + z
+            end
+            heightAngle = math.atan(z - self.missileZ, distance)
+        else
+            heightAngle = nil
+        end
+        self:move(nil, nil, nil, math.atan(dy, dx), heightAngle)
     end
 end)
 if Debug then Debug.endFile() end

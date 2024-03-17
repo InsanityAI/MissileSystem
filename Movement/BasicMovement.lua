@@ -24,22 +24,31 @@ OnInit.module("MissileSystem/Movement/BasicMovement", function(require)
 
         if missile.targetting then -- every movement type should handle if there is no targetting involved (only missile and delay parameters are available then.)
             rs = delay > 1 and self.rotationSpeed * delay or self.rotationSpeed
-            dAngleXY = terrainAngleToTarget - missile.groundAngle
-            if heightAngleToTarget ~= nil then
-                dAngleZ = heightAngleToTarget - missile.heightAngle
-                if (terrainAngleToTarget ^ 2 + heightAngleToTarget ^ 2) > rs ^ 2 then
-                    angleAngle = math.atan(dAngleZ, dAngleXY)
-                    dAngleXY = ((dAngleXY > 0) and 1 or -1) * rs * math.cos(angleAngle)
-                    dAngleZ = ((dAngleZ > 0) and 1 or -1) * rs * math.sin(angleAngle)
+            if rs <= 0 then
+                orientXY = terrainAngleToTarget
+                if heightAngleToTarget ~= nil then
+                    orientZ = heightAngleToTarget
+                else
+                    orientZ = nil
                 end
-                orientZ = missile.heightAngle + dAngleZ
             else
-                if math.abs(dAngleXY) > rs then
-                    dAngleXY = (dAngleXY > 0 and 1 or -1) * rs
+                dAngleXY = terrainAngleToTarget - missile.groundAngle
+                if heightAngleToTarget ~= nil then
+                    dAngleZ = heightAngleToTarget - missile.heightAngle
+                    if (terrainAngleToTarget ^ 2 + heightAngleToTarget ^ 2) > rs ^ 2 then
+                        angleAngle = math.atan(dAngleZ, dAngleXY)
+                        dAngleXY = ((dAngleXY > 0) and 1 or -1) * rs * math.cos(angleAngle)
+                        dAngleZ = ((dAngleZ > 0) and 1 or -1) * rs * math.sin(angleAngle)
+                    end
+                    orientZ = missile.heightAngle + dAngleZ
+                else
+                    if math.abs(dAngleXY) > rs then
+                        dAngleXY = (dAngleXY > 0 and 1 or -1) * rs
+                    end
+                    orientZ = nil
                 end
-                orientZ = nil
+                orientXY = missile.groundAngle + dAngleXY
             end
-            orientXY = missile.groundAngle + dAngleXY
         else -- straight line movement
             orientXY, orientZ = missile.groundAngle, missile.heightAngle
         end
@@ -50,7 +59,7 @@ OnInit.module("MissileSystem/Movement/BasicMovement", function(require)
             vectorZ, ms = ms * math.sin(orientZ), ms * math.cos(orientZ)
         end
         vectorX, vectorY = ms * math.cos(orientXY), ms * math.sin(orientXY)
-        return ms, missile.missileX + vectorX, missile.missileY + vectorY, missile.missileZ + vectorZ, orientXY, orientZ
+        return ms, vectorX, vectorY, vectorZ, orientXY, orientZ
     end
 
     ---@param movementSpeed number

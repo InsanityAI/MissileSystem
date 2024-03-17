@@ -1,6 +1,6 @@
 if Debug then Debug.beginFile "MissileSystem/Movement/MissileMovementModule" end
 OnInit.module("MissileSystem/Movement/MissileMovementModule", function(require)
-    ---@alias MovementHandler fun(self: MissileMovementModule, missile: Missile, delay: number, distanceToTarget?: number?, terrainAngleToTarget?: number?, heightAngleToTarget?: number?): distanceMoved: number, x: number, y:number, z:number?, orientXY: number, orientZ: number?
+    ---@alias MovementHandler fun(self: MissileMovementModule, missile: Missile, delay: number, distanceToTarget?: number?, terrainAngleToTarget?: number?, heightAngleToTarget?: number?): vector: number, vectorX: number, vectorY:number, vectorZ:number?, orientXY: number, orientZ: number?
 
     ---@class MissileMovementModule abstract
     ---@field handleMissile MovementHandler

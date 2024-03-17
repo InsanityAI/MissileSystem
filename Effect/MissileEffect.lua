@@ -1,6 +1,5 @@
 if Debug then Debug.beginFile "MissileSystem/Effect/MissileEffect" end
 OnInit.module("MissileSystem/Effect/MissileEffect", function(require)
-
     ---@class MissileEffectSet: Set
     ---@field create fun(...: MissileEffect): MissileEffectSet
     ---@field union fun(...: MissileEffect): MissileEffectSet
@@ -76,7 +75,8 @@ OnInit.module("MissileSystem/Effect/MissileEffect", function(require)
     ---@param pitch number?
     ---@param roll number?
     function MissileEffect:orient(yaw, pitch, roll)
-        self.yaw, self.pitch, self.roll = yaw and yaw or self.yaw, pitch and pitch or self.pitch, roll and roll or self.roll
+        self.yaw, self.pitch, self.roll = yaw and yaw or self.yaw, pitch and pitch or self.pitch,
+            roll and roll or self.roll
         BlzSetSpecialEffectOrientation(self.effect, self.yaw, self.pitch, self.roll)
     end
 
@@ -84,11 +84,10 @@ OnInit.module("MissileSystem/Effect/MissileEffect", function(require)
     ---@param y number
     ---@param z number
     function MissileEffect:move(x, y, z)
-        if not (x > WorldBounds.maxX or x < WorldBounds.minX or y > WorldBounds.maxY or y < WorldBounds.minY) then
-            BlzSetSpecialEffectPosition(self.effect, x - self.dx, y - self.dy, z - self.dz)
-            return true
-        end
-        return false
+        self.x = x - self.dx
+        self.y = y - self.dy
+        self.z = z - self.dz
+        BlzSetSpecialEffectPosition(self.effect, self.x, self.y, self.z)
     end
 
     ---@param model string
@@ -142,18 +141,18 @@ OnInit.module("MissileSystem/Effect/MissileEffect", function(require)
         BlzSetSpecialEffectPosition(self.effect, self.x - self.dx, self.y - self.dy, self.z - self.dz)
     end
 
-    ---@param x number?
-    ---@param y number?
-    ---@param z number?
+    ---@param dx number?
+    ---@param dy number?
+    ---@param dz number?
     ---@return MissileEffect
-    function MissileEffect.create(x, y, z)
+    function MissileEffect.create(dx, dy, dz)
         return setmetatable({
-            x = x or 0,
-            y = y or 0,
-            z = z or 0,
-            dx = 0,
-            dy = 0,
-            dz = 0,
+            x = 0,
+            y = 0,
+            z = 0,
+            dx = dx and dx or 0,
+            dy = dy and dy or 0,
+            dz = dz and dz or 0,
             model = nil,
             size = 1,
             yaw = 0,
@@ -178,6 +177,8 @@ OnInit.module("MissileSystem/Effect/MissileEffect", function(require)
         self.missile = missile
         if self.missile then
             self.missile.effects:addSingle(self)
+            self:move(self.missile.missileX, self.missile.missileY, self.missile.missileZ)
+            self:orient(self.missile.groundAngle, self.missile.heightAngle)
         end
     end
 

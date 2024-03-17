@@ -37,7 +37,9 @@ OnInit.module("MissileSystem/Targetting/PointTargetting", function(require)
     ---@return PointTargetting
     function PointTargetting.create(x, y, z)
         return setmetatable({
-            target = { x = x, y = y, z = z }
+            x = x,
+            y = y,
+            z = z
         }, PointTargetting) --[[@as PointTargetting]]
     end
 

@@ -1,14 +1,5 @@
 if Debug then Debug.beginFile "MissileSystem" end
 OnInit.module("MissileSystem", function(require)
-    require "MissileSystem/Missile"
-    local heightSuppliers = require "MissileSystem/WidgetHeightSuppliers" ---@type WidgetHeightSuppliers
-    require "TaskProcessor"
-    require "SetUtils"
-    require "MapBounds"
-    require "TimerQueue"
-
-    local processor = Processor.create(1)
-    local missileTQ = TimerQueue.create()
     MissileSystem = {
         PERIOD = 1 / 40,      -- update tick for missiles
         OP_COUNT = 100,       -- amount of operations a missile counts as when processing
@@ -17,6 +8,25 @@ OnInit.module("MissileSystem", function(require)
         missiles = Set.create()
     }
 
+    require "MissileSystem/Missile"
+    require "MissileSystem/Movement/MissileMovementModule"
+    require "MissileSystem/Movement/BasicMovement"
+    require "MissileSystem/Movement/ArcMovement"
+    require "MissileSystem/Targetting/MissileTargettingModule"
+    require "MissileSystem/Targetting/PointTargetting"
+    require "MissileSystem/Targetting/UnitTargetting"
+    require "MissileSystem/Targetting/DestructableTargetting"
+    require "MissileSystem/Targetting/ItemTargetting"
+    require "MissileSystem/Targetting/MissileTargetting"
+    require "MissileSystem/Effect/MissileEffect"
+    require "MissileSystem/VisionDummyRecycler"
+    local heightSuppliers = require "MissileSystem/WidgetHeightSuppliers" ---@type WidgetHeightSuppliers
+    require "TaskProcessor"
+    require "SetUtils"
+    require "MapBounds"
+    require "TimerQueue"
+
+    local processor = Processor.create(1)
     --- temp variables
     local rect = Rect(0, 0, 0, 0)
     local dx, dy ---@type number, number
@@ -131,8 +141,20 @@ OnInit.module("MissileSystem", function(require)
     ---@param delay number
     local function handleTerrain(missile, delay)
         if missile.collideZ == CollideZMode.UNSAFE and GetPointZ(missile.missileX, missile.missileY) > missile.missileZ or
-            missile.collideZ == CollideZMode.SAFE and GetTerrainCliffLevel(missile.missileX, missile.missileY) * bj_CLIFFHEIGHT > missile.missileZ then
+            missile.collideZ == CollideZMode.SAFE and (GetTerrainCliffLevel(missile.missileX, missile.missileY) - 2) * bj_CLIFFHEIGHT > missile.missileZ then
             missile.onTerrain(missile, delay)
+        end
+    end
+
+    local function performMove(self, x, y, z, groundAngle, heightAngle)
+        self.missileX = x or self.missileX
+        self.missileY = y or self.missileY
+        self.missileZ = z or self.missileZ
+        self.groundAngle = groundAngle or self.groundAngle
+        self.heightAngle = heightAngle or self.heightAngle
+        for effect in self.effects:elements() do
+            effect:move(self.missileX, self.missileY, self.missileZ)
+            effect:orient(self.groundAngle, self.heightAngle, nil)
         end
     end
 
@@ -154,7 +176,13 @@ OnInit.module("MissileSystem", function(require)
         missile.movementTime = missile.movementTime + MissileSystem.PERIOD + delay
         offsetD, missile.nextMissileX, missile.nextMissileY, missile.nextMissileZ, missile.nextGroundAngle, missile.nextHeightAngle =
             missile.movement:handleMissile(missile, delay, distance, terrainAngle, heightAngle)
+
         missile.movedDistance = missile.movedDistance + offsetD
+        if missile.missileZ ~= nil and missile.nextMissileZ ~= nil then
+            missile.nextMissileZ = missile.missileZ + missile.nextMissileZ
+        end
+        missile.nextMissileX = missile.missileX + missile.nextMissileX
+        missile.nextMissileY = missile.missileY + missile.nextMissileY
 
         hitBoundary = false
         if missile.nextMissileX > WorldBounds.maxX then
@@ -178,28 +206,29 @@ OnInit.module("MissileSystem", function(require)
         if missile.onItem and missile.collisionSize > 0 then handleItem(missile, delay) end
         if missile.onCliff then handleCliff(missile, delay) end
         if missile.onTerrain then handleTerrain(missile, delay) end
-        -- removed onTileset
+        -- removed onTileset - can be done with onProcess tbh.
         if missile.onProcess then missile.onProcess(missile, delay) end
         if missile.onBoundaries and hitBoundary then missile.onBoundaries(missile, delay) end
-        if missile.onFinish then missile.onFinish(missile, delay) end
 
         if missile.visionUnit then
             SetUnitX(missile.visionUnit, missile.nextMissileX)
             SetUnitY(missile.visionUnit, missile.nextMissileY)
         end
-
-        missile.missileX = missile.nextMissileX
-        missile.missileY = missile.nextMissileY
-        missile.missileZ = missile.nextMissileZ
-        missile.groundAngle = missile.nextGroundAngle
-        missile.heightAngle = missile.nextHeightAngle
-
-        for effect in missile.effects:elements() do
-            effect:move(missile.missileX, missile.missileY, missile.missileZ)
-            effect:orient(missile.groundAngle, missile.heightAngle, nil)
-        end
-
+        performMove(missile, missile.nextMissileX, missile.nextMissileY, missile.nextMissileZ, missile.nextGroundAngle,
+            missile.nextHeightAngle)
         return missile.destroyed
+    end
+
+    ---@param x number?
+    ---@param y number?
+    ---@param z number? if collideZ is not UNSAFE, treat this value as offset from ground
+    ---@param groundAngle number?
+    ---@param heightAngle number?
+    function Missile:move(x, y, z, groundAngle, heightAngle)
+        if z and self.collideZ ~= CollideZMode.UNSAFE then
+            z = (GetTerrainCliffLevel(self.missileX, self.missileY) - 2) * bj_CLIFFHEIGHT + z
+        end
+        performMove(self, x, y, z, groundAngle, heightAngle)
     end
 
     function Missile:launch()
@@ -216,6 +245,9 @@ OnInit.module("MissileSystem", function(require)
         if self.visionUnit then
             VisionDummyRecycler.release(self.visionUnit)
             self.visionUnit = nil
+        end
+        for effect in self.effects:elements() do
+            effect:destroy()
         end
         self.onUnit = nil
         self.onMissile = nil
