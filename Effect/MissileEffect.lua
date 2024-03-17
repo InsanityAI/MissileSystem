@@ -1,31 +1,51 @@
-if Debug then Debug.beginFile "MissileEffect" end
-OnInit.module("MissileEffect", function()
-    --[[
-    -- ------------------------------------- Missile Effect v2.8 ------------------------------------ --
-    -- Credits to Forsakn for the first translation of Missile Effect to LUA
-    -- ---------------------------------------- By Chopinski ---------------------------------------- --
-]]
+if Debug then Debug.beginFile "MissileSystem/Effect/MissileEffect" end
+OnInit.module("MissileSystem/Effect/MissileEffect", function(require)
+
+    ---@class MissileEffectSet: Set
+    ---@field create fun(...: MissileEffect): MissileEffectSet
+    ---@field union fun(...: MissileEffect): MissileEffectSet
+    ---@field intersection fun(...: MissileEffect): MissileEffectSet
+    ---@field except fun(...: MissileEffect): MissileEffectSet
+    ---@field fromTable fun(data: MissileEffect[]): MissileEffectSet
+    ---@field add fun(self: MissileEffectSet, ...: MissileEffect): MissileEffectSet
+    ---@field remove fun(self: MissileEffectSet, ...: MissileEffect): MissileEffectSet
+    ---@field addAll fun(self: MissileEffectSet, container: MissileEffectSet|MissileEffect[]): MissileEffectSet
+    ---@field addAllKeys fun(self: MissileEffectSet, container: table<MissileEffectSet, unknown>): MissileEffectSet
+    ---@field removeAll fun(self: MissileEffectSet, container: MissileEffectSet|MissileEffect[]): MissileEffectSet
+    ---@field retainAll fun(self: MissileEffectSet, container: MissileEffectSet|MissileEffect[]): MissileEffectSet
+    ---@field clear fun(self: MissileEffectSet): MissileEffectSet
+    ---@field elements fun(self: MissileEffectSet): fun(): MissileEffect
+    ---@field contains fun(self: MissileEffectSet, effect: MissileEffect): boolean
+    ---@field size fun(self: MissileEffectSet): integer
+    ---@field isEmpty fun(self: MissileEffectSet): boolean
+    ---@field toString fun(self: MissileEffectSet): string
+    ---@field print fun(self: MissileEffectSet)
+    ---@field random fun(self: MissileEffectSet): MissileEffect
+    ---@field toArray fun(self: MissileEffectSet): MissileEffect[]
+    ---@field intersects fun(self: MissileEffectSet, otherSet: MissileEffectSet): boolean
+    ---@field copy fun(self: MissileEffectSet): MissileEffectSet
 
     ---@class MissileEffect
-    ---@field x number
-    ---@field y number
-    ---@field z number
-    ---@field dx number
-    ---@field dy number
-    ---@field dz number
-    ---@field model string
-    ---@field size integer
-    ---@field yaw integer
-    ---@field pitch integer
-    ---@field roll integer
-    ---@field alpha integer
-    ---@field colorRed integer
-    ---@field colorGreen integer
-    ---@field colorBlue integer
-    ---@field playerColor player
-    ---@field animation animtype
-    ---@field timescale number
-    ---@field effect effect
+    ---@field missile Missile? readonly
+    ---@field x number readonly
+    ---@field y number readonly
+    ---@field z number readonly
+    ---@field dx number readonly
+    ---@field dy number readonly
+    ---@field dz number readonly
+    ---@field model string readonly
+    ---@field size integer readonly
+    ---@field yaw integer readonly
+    ---@field pitch integer readonly
+    ---@field roll integer readonly
+    ---@field alpha integer readonly
+    ---@field colorRed integer readonly
+    ---@field colorGreen integer readonly
+    ---@field colorBlue integer readonly
+    ---@field playerColor player readonly
+    ---@field animation animtype readonly
+    ---@field timescale number readonly
+    ---@field effect effect readonly
     MissileEffect = {}
     MissileEffect.__index = MissileEffect
 
@@ -46,25 +66,18 @@ OnInit.module("MissileEffect", function()
             missileEffect.y - missileEffect.dy, missileEffect.z - missileEffect.dz)
     end
 
-    function MissileEffect:destroy()
-        DestroyEffect(self.effect)
-        self.effect = nil
-    end
-
-    MissileEffect.detach = MissileEffect.destroy
-
     ---@param scale number
     function MissileEffect:setScale(scale)
         self.size = scale
         BlzSetSpecialEffectScale(self.effect, scale)
     end
 
-    ---@param yaw number
-    ---@param pitch number
-    ---@param roll number
+    ---@param yaw number?
+    ---@param pitch number?
+    ---@param roll number?
     function MissileEffect:orient(yaw, pitch, roll)
-        self.yaw, self.pitch, self.roll = yaw, pitch, roll
-        BlzSetSpecialEffectOrientation(self.effect, yaw, pitch, roll)
+        self.yaw, self.pitch, self.roll = yaw and yaw or self.yaw, pitch and pitch or self.pitch, roll and roll or self.roll
+        BlzSetSpecialEffectOrientation(self.effect, self.yaw, self.pitch, self.roll)
     end
 
     ---@param x number
@@ -155,6 +168,25 @@ OnInit.module("MissileEffect", function()
             timescale = 1,
             effect = nil
         }, MissileEffect)
+    end
+
+    ---@param missile Missile? nil to remove effect from missile - effect still needs to be destroyed afterwards
+    function MissileEffect:attachToMissile(missile)
+        if self.missile then
+            self.missile.effects:removeSingle(self)
+        end
+        self.missile = missile
+        if self.missile then
+            self.missile.effects:addSingle(self)
+        end
+    end
+
+    function MissileEffect:destroy()
+        if self.missile then
+            self.missile.effects:removeSingle(self)
+        end
+        DestroyEffect(self.effect)
+        self.effect = nil
     end
 end)
 if Debug then Debug.endFile() end
