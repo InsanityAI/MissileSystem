@@ -9,7 +9,7 @@ OnInit.module("MissileSystem/Missile", function(require)
         SAFE = 2,  -- uses safe but often imprecise methods to figure out height collision (sometimes not possible or lacking, like with Destructables)
         UNSAFE = 3 -- uses GetLocationZ and other async methods (Caution: may cause desyncs!)
     }
-    local DEFAULT_Z_MODE = CollideZMode.NONE
+    local DEFAULT_Z_MODE = CollideZMode.SAFE
 
     ---@class Missile
     ---@field owner player readonly

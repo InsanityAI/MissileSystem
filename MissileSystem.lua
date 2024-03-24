@@ -20,6 +20,9 @@ OnInit.module("MissileSystem", function(require)
     require "MissileSystem/Targetting/MissileTargetting"
     require "MissileSystem/Effect/MissileEffect"
     require "MissileSystem/VisionDummyRecycler"
+    require "MissileSystem/Simple/SimpleMovementCache"
+    require "MissileSystem/Simple/SimpleTargettingCache"
+    require "MissileSystem/Simple/SimpleMissile"
     local heightSuppliers = require "MissileSystem/WidgetHeightSuppliers" ---@type WidgetHeightSuppliers
     require "TaskProcessor"
     require "SetUtils"
@@ -173,7 +176,7 @@ OnInit.module("MissileSystem", function(require)
         else
             distance, terrainAngle, heightAngle = nil, nil, nil
         end
-        missile.movementTime = missile.movementTime + MissileSystem.PERIOD + delay
+        missile.movementTime = missile.movementTime + (MissileSystem.PERIOD * (1 + delay))
         offsetD, missile.nextMissileX, missile.nextMissileY, missile.nextMissileZ, missile.nextGroundAngle, missile.nextHeightAngle =
             missile.movement:handleMissile(missile, delay, distance, terrainAngle, heightAngle)
 
@@ -234,8 +237,15 @@ OnInit.module("MissileSystem", function(require)
     function Missile:launch()
         MissileSystem.missiles:addSingle(self)
         if self.movement then
-            self.processorTask = processor:enqueueTask(function(delay) return move(self, delay) end,
-                MissileSystem.OP_COUNT, MissileSystem.PERIOD)
+            self.processorTask = processor:enqueueTask(function(delay)
+                local success, result = pcall(move, self, delay)
+                if success then
+                    return result
+                else
+                    print(Debug.getLocalErrorMsg(result --[[@as string]]))
+                    return false
+                end
+            end, MissileSystem.OP_COUNT, MissileSystem.PERIOD)
         end
     end
 
