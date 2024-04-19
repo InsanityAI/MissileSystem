@@ -29,13 +29,14 @@ OnInit.module("MissileSystem", function(require)
     require "MapBounds"
     require "TimerQueue"
 
-    local processor = Processor.create(1)
+    local processor = TaskProcessor.create(1)
     --- temp variables
     local rect = Rect(0, 0, 0, 0)
     local dx, dy ---@type number, number
     local heightDelta ---@type number
     local distance, terrainAngle, heightAngle ---@type number?, number?, number?
     local hitBoundary ---@type boolean
+    local success ---@type boolean
     ---
 
     ---@param heightSupplier fun(widget: widget, collideZMode: CollideZMode): height: number?
@@ -172,13 +173,24 @@ OnInit.module("MissileSystem", function(require)
             return true
         end
         if missile.targetting then
-            distance, terrainAngle, heightAngle = missile.targetting:handleMissile(missile, delay)
+            success, distance, terrainAngle, heightAngle = pcall(missile.targetting.handleMissile, missile.targetting,
+                missile, delay)
         else
             distance, terrainAngle, heightAngle = nil, nil, nil
         end
+
+        if not success then
+            error("Error occurred: " .. distance)
+        end
+
         missile.movementTime = missile.movementTime + (MissileSystem.PERIOD * (1 + delay))
-        offsetD, missile.nextMissileX, missile.nextMissileY, missile.nextMissileZ, missile.nextGroundAngle, missile.nextHeightAngle =
-            missile.movement:handleMissile(missile, delay, distance, terrainAngle, heightAngle)
+        success, offsetD, missile.nextMissileX, missile.nextMissileY, missile.nextMissileZ, missile.nextGroundAngle, missile.nextHeightAngle =
+            pcall(missile.movement.handleMissile, missile.movement, missile, delay, distance, terrainAngle, heightAngle)
+
+        if not success then
+            error("Error occurred: " .. offsetD)
+        end
+
 
         missile.movedDistance = missile.movedDistance + offsetD
         if missile.missileZ ~= nil and missile.nextMissileZ ~= nil then
@@ -219,7 +231,8 @@ OnInit.module("MissileSystem", function(require)
         end
         performMove(missile, missile.nextMissileX, missile.nextMissileY, missile.nextMissileZ, missile.nextGroundAngle,
             missile.nextHeightAngle)
-        return missile.destroyed
+
+        return not missile.destroyed
     end
 
     ---@param x number?
@@ -234,18 +247,23 @@ OnInit.module("MissileSystem", function(require)
         performMove(self, x, y, z, groundAngle, heightAngle)
     end
 
+    ---@param delay number
+    ---@param missile Missile
+    local function processMissileMovement(delay, missile)
+        local success, result = pcall(move, missile, delay)
+        if success then
+            return result
+        else
+            print(Debug.getLocalErrorMsg(result --[[@as string]]))
+            return false
+        end
+    end
+
     function Missile:launch()
         MissileSystem.missiles:addSingle(self)
         if self.movement then
-            self.processorTask = processor:enqueueTask(function(delay)
-                local success, result = pcall(move, self, delay)
-                if success then
-                    return result
-                else
-                    print(Debug.getLocalErrorMsg(result --[[@as string]]))
-                    return false
-                end
-            end, MissileSystem.OP_COUNT, MissileSystem.PERIOD)
+            self.processorTask = processor:enqueuePeriodic(processMissileMovement, MissileSystem.PERIOD,
+                MissileSystem.OP_COUNT, TaskAPI.REACTIVE, self) --[[@as TaskObservable]]
         end
     end
 
