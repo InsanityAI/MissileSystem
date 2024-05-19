@@ -1,7 +1,7 @@
 if Debug then Debug.beginFile "MissileSystem/Targetting/ItemTargetting" end
 OnInit.module("MissileSystem/Targetting/ItemTargetting", function(require)
     require "MissileSystem/Targetting/PointTargetting"
-    local heightSuppliers = require "MissileSystem/WidgetHeightSuppliers" ---@type WidgetHeightSuppliers
+    local heightSuppliers = require "MissileSystem/HeightSuppliers" ---@type HeightSuppliers
 
     ---@class ItemTargetting: PointTargetting
     ---@field target item

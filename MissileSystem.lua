@@ -1,7 +1,7 @@
 if Debug then Debug.beginFile "MissileSystem" end
 OnInit.module("MissileSystem", function(require)
     MissileSystem = {
-        PERIOD = 1 / 40,      -- update tick for missiles
+        PERIOD = 0.02,        -- update tick for missiles
         OP_COUNT = 100,       -- amount of operations a missile counts as when processing
         COLLISION_SIZE = 128, -- the average collision size compensation when detecting collisions
         ITEM_SIZE = 16,       -- item size used in z collision
@@ -23,7 +23,7 @@ OnInit.module("MissileSystem", function(require)
     require "MissileSystem/Simple/SimpleMovementCache"
     require "MissileSystem/Simple/SimpleTargettingCache"
     require "MissileSystem/Simple/SimpleMissile"
-    local heightSuppliers = require "MissileSystem/WidgetHeightSuppliers" ---@type WidgetHeightSuppliers
+    local heightSuppliers = require "MissileSystem/HeightSuppliers" ---@type HeightSuppliers
     require "TaskProcessor"
     require "SetUtils"
     require "MapBounds"
@@ -123,33 +123,32 @@ OnInit.module("MissileSystem", function(require)
         end
     end
 
+    local cliffDelta ---@type number
     ---@param missile Missile
     ---@param delay number
     local function handleCliff(missile, delay)
-        local cliffDelta = GetTerrainCliffLevel(missile.nextMissileX, missile.nextMissileY) -
-            GetTerrainCliffLevel(missile.missileX, missile.missileY)
-        if (missile.collideZ == CollideZMode.NONE or missile.collideZ == CollideZMode.SAFE) and cliffDelta ~= 0 then
+        cliffDelta = GetTerrainCliffLevel(missile.nextMissileX, missile.nextMissileY) - GetTerrainCliffLevel(missile.missileX, missile.missileY)
+        if cliffDelta ~= 0 then
             missile.onCliff(missile, cliffDelta, delay)
-        elseif missile.collideZ == CollideZMode.UNSAFE then
-            if cliffDelta ~= 0 then
-                heightDelta = GetPointZ(missile.nextMissileX, missile.nextMissileY) -
-                    GetPointZ(missile.missileX, missile.missileY)
-                if heightDelta > bj_CLIFFHEIGHT or heightDelta < bj_CLIFFHEIGHT then
-                    missile.onCliff(missile, cliffDelta, delay)
-                end
-            end
         end
     end
 
+    local currentTerrainHeight ---@type number?
     ---@param missile Missile
     ---@param delay number
     local function handleTerrain(missile, delay)
-        if missile.collideZ == CollideZMode.UNSAFE and GetPointZ(missile.missileX, missile.missileY) > missile.missileZ or
-            missile.collideZ == CollideZMode.SAFE and (GetTerrainCliffLevel(missile.missileX, missile.missileY) - 2) * bj_CLIFFHEIGHT > missile.missileZ then
+        currentTerrainHeight = heightSuppliers.getTerrainHeight(missile.missileX, missile.missileY, missile.collideZ)
+        if currentTerrainHeight and currentTerrainHeight > missile.missileZ then
             missile.onTerrain(missile, delay)
         end
     end
 
+    ---@param self Missile
+    ---@param x number?
+    ---@param y number?
+    ---@param z number?
+    ---@param groundAngle number?
+    ---@param heightAngle number?
     local function performMove(self, x, y, z, groundAngle, heightAngle)
         self.missileX = x or self.missileX
         self.missileY = y or self.missileY
@@ -177,6 +176,7 @@ OnInit.module("MissileSystem", function(require)
                 missile, delay)
         else
             distance, terrainAngle, heightAngle = nil, nil, nil
+            success = true
         end
 
         if not success then
@@ -237,12 +237,21 @@ OnInit.module("MissileSystem", function(require)
 
     ---@param x number?
     ---@param y number?
-    ---@param z number? if collideZ is not UNSAFE, treat this value as offset from ground
+    ---@param z number?
     ---@param groundAngle number?
     ---@param heightAngle number?
     function Missile:move(x, y, z, groundAngle, heightAngle)
-        if z and self.collideZ ~= CollideZMode.UNSAFE then
-            z = (GetTerrainCliffLevel(self.missileX, self.missileY) - 2) * bj_CLIFFHEIGHT + z
+        performMove(self, x, y, z, groundAngle, heightAngle)
+    end
+
+    ---@param x number?
+    ---@param y number?
+    ---@param z number?
+    ---@param groundAngle number?
+    ---@param heightAngle number?
+    function Missile:moveWithRelativeZ(x, y, z, groundAngle, heightAngle)
+        if x and y and z then
+            z = heightSuppliers.getTerrainHeight(x, y, self.collideZ) + z
         end
         performMove(self, x, y, z, groundAngle, heightAngle)
     end

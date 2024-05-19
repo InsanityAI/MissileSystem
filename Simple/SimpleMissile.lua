@@ -1,10 +1,10 @@
 if Debug then Debug.beginFile "MissileSystem/Simple/SimpleMissile" end
-OnInit.module("MissileSystem/Simple/SimpleMissile", function (require)
+OnInit.module("MissileSystem/Simple/SimpleMissile", function(require)
     require "MissileSystem/Missile"
     require "MissileSystem/Simple/SimpleMovementCache"
 
     ---@class SimpleMissile: Missile
-    ---@field distancedLife number?
+    ---@field range number?
     SimpleMissile = {}
     SimpleMissile.__index = SimpleMissile
     setmetatable(SimpleMissile, Missile)
@@ -27,7 +27,7 @@ OnInit.module("MissileSystem/Simple/SimpleMissile", function (require)
     ---@param missile SimpleMissile
     ---@param delay number
     local function missileProcessDeath(missile, delay)
-        if missile.distancedLife and missile.movedDistance > missile.distancedLife then
+        if missile.range and missile.movedDistance > missile.range then
             missile:destroy()
         end
     end
@@ -36,21 +36,22 @@ OnInit.module("MissileSystem/Simple/SimpleMissile", function (require)
     ---@param model string
     ---@param fromX number
     ---@param fromY number
-    ---@param fromZ number?
+    ---@param fromZ number? relative
     ---@param toX number
     ---@param toY number
-    ---@param toZ number?
+    ---@param toZ number? relative
     ---@return SimpleMissile
     function SimpleMissile.create(owner, model, fromX, fromY, fromZ, toX, toY, toZ)
-        local missile = setmetatable(Missile.create(owner, fromX, fromY, fromZ), SimpleMissile) --[[@as SimpleMissile]]
-        missile:orientTowards(toX, toY, toZ)
-        missile:setTarget(toX, toY, toZ)
+        fromZ = fromZ or 0
+        toZ = toZ or 0
+        local missile = setmetatable(Missile.createRelativeZ(owner, fromX, fromY, fromZ), SimpleMissile) --[[@as SimpleMissile]]
+        missile:relativeZOrientTowards(toX, toY, toZ)
         local effect = MissileEffect.create()
         effect:attachToMissile(missile)
         effect:setModel(model)
         missile.onTerrain = missileDeath
         missile.onBoundaries = missileDeath
-        missile.onCliff = missileCliffDeath
+        --missile.onCliff = missileCliffDeath
         missile.onProcess = missileProcessDeath
         return missile
     end
@@ -66,9 +67,12 @@ OnInit.module("MissileSystem/Simple/SimpleMissile", function (require)
     ---@overload fun(self: SimpleMissile, targetDestructable: destructable)
     ---@overload fun(self: SimpleMissile, targetItem: item)
     ---@overload fun(self: SimpleMissile, targetMissile: Missile)
-    ---@overload fun(self: SimpleMissile, targetX: number, targetY: number, targetZ: number?)
-    function SimpleMissile:setTarget(target, targetY, targetZ)
+    ---@overload fun(self: SimpleMissile, targetX: number, targetY: number, targetZ: number?, deathOnArrival: true?)
+    function SimpleMissile:setTarget(target, targetY, targetZ, deathOnArrival)
         SimpleTargettingCache:get(target, targetY, targetZ):applyToMissile(self)
+        if deathOnArrival and target and targetY then
+            self.range = math.sqrt((target - self.missileX) ^ 2 + (targetY - self.missileY) ^ 2)
+        end
     end
 
     ---@param model string
@@ -111,6 +115,5 @@ OnInit.module("MissileSystem/Simple/SimpleMissile", function (require)
     function SimpleMissile:setTimescale(timescale)
         (self.effects.data[0] --[[@as MissileEffect]]):setTimeScale(timescale)
     end
-
 end)
 if Debug then Debug.endFile() end

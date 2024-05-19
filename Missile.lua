@@ -1,5 +1,6 @@
 if Debug then Debug.beginFile "MissileSystem/Missile" end
 OnInit.module("MissileSystem/Missile", function(require)
+    local heightSuppliers = require "MissileSystem/HeightSuppliers" ---@type HeightSuppliers
     -- Note: properties marked as readonly should NOT be set to some other value explicitly.
     --      Otherwise, the system will do weird stuff. You have been warned!
 
@@ -69,16 +70,15 @@ OnInit.module("MissileSystem/Missile", function(require)
     ---@param owner player
     ---@param originX number
     ---@param originY number
-    ---@param originZ number? if collideZ is UNSAFE, this is absolute value, otherwise it's treated as offset from ground level
+    ---@param originZ number? default is terrain's height
     ---@param groundAngle number? default is bj_UNIT_FACING
     ---@param heightAngle number? default is 0
     ---@param collideZ CollideZMode? if undefined uses default
     ---@return Missile
     function Missile.create(owner, originX, originY, originZ, groundAngle, heightAngle, collideZ)
         collideZ = collideZ or DEFAULT_Z_MODE
-        originZ = originZ or 0
-        if collideZ ~= CollideZMode.UNSAFE then
-            originZ = (GetTerrainCliffLevel(originX, originY) - 2) * bj_CLIFFHEIGHT + originZ
+        if not originZ then
+            originZ = heightSuppliers.getTerrainHeight(originX, originY, collideZ)
         end
 
         return setmetatable({
@@ -101,6 +101,20 @@ OnInit.module("MissileSystem/Missile", function(require)
             movementTime = 0,
             movedDistance = 0
         }, Missile)
+    end
+
+    ---@param owner player
+    ---@param originX number
+    ---@param originY number
+    ---@param relativeOriginZ number
+    ---@param groundAngle number? default is bj_UNIT_FACING
+    ---@param heightAngle number? default is 0
+    ---@param collideZ CollideZMode? if undefined uses default
+    ---@return Missile
+    function Missile.createRelativeZ(owner, originX, originY, relativeOriginZ, groundAngle, heightAngle, collideZ)
+        collideZ = collideZ or DEFAULT_Z_MODE
+        relativeOriginZ = heightSuppliers.getTerrainHeight(originX, originY, collideZ) + relativeOriginZ
+        return Missile.create(owner, originX, originY, relativeOriginZ, groundAngle, heightAngle, collideZ)
     end
 
     ---@param range number
@@ -156,7 +170,7 @@ OnInit.module("MissileSystem/Missile", function(require)
     ---@overload fun(self: Missile, target: widget, z: number?)
     ---@param x number
     ---@param y number
-    ---@param z number? if collideZ is not UNSAFE, treat this value as offset from ground
+    ---@param z number?
     function Missile:orientTowards(x, y, z)
         if type(x) ~= 'number' then
             if y then
@@ -169,14 +183,29 @@ OnInit.module("MissileSystem/Missile", function(require)
         dx, dy = x - self.missileX, y - self.missileY
         distance = (dx ^ 2 + dy ^ 2) ^ 0.5
         if z then
-            if self.collideZ ~= CollideZMode.UNSAFE then
-                z = (GetTerrainCliffLevel(x, y) - 2) * bj_CLIFFHEIGHT + z
-            end
             heightAngle = math.atan(z - self.missileZ, distance)
         else
             heightAngle = nil
         end
         self:move(nil, nil, nil, math.atan(dy, dx), heightAngle)
+    end
+
+    ---@overload fun(self: Missile, target: widget, z: number?)
+    ---@param x number
+    ---@param y number
+    ---@param z number
+    function Missile:relativeZOrientTowards(x, y, z)
+        if type(x) ~= 'number' then
+            if y then
+                z = y
+            end
+            y = GetWidgetY(x)
+            x = GetWidgetX(x)
+            z = heightSuppliers.getWidgetHeight(x --[[@as widget]], self.collideZ) + z
+        else
+            z = heightSuppliers.getTerrainHeight(x, y, self.collideZ) + z
+        end
+        self:orientTowards(x, y, z)
     end
 end)
 if Debug then Debug.endFile() end
