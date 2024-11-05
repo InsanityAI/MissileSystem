@@ -23,6 +23,7 @@ OnInit.module("MissileSystem/Movement/ArcMovement", function(require)
 
     ---@type MovementHandler
     ---@param missile MissileWithArcMovement
+    ---@return number vector, number vectorX, number vectorY, number? vectorZ, number orientXY, number? orientZ
     function ArcMovement:handleMissile(missile, delay, distanceToTarget, terrainAngleToTarget, heightAngleToTarget)
         ms = delay > 1 and self.movementSpeed * delay or self.movementSpeed
         gravityVector = delay > 1 and self.gravity * delay or self.gravity

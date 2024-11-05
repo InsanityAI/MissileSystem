@@ -19,7 +19,7 @@ OnInit.module("MissileSystem/Missile", function(require)
     ---@field destroyed boolean readonly
     ---@field paused boolean readonly
     ---@field processorTask TaskObservable readonly
-    ---@field timedLifeTask TimerQueueTask readonly
+    ---@field timedLifeTask TimerQueueElement readonly
     ---@field effects MissileEffectSet readonly - use MissileEffect:attachToMissile to add or remove effects
     ---
     --- Position
@@ -159,7 +159,7 @@ OnInit.module("MissileSystem/Missile", function(require)
         if seconds then
             self.timedLifeTask = TimerQueue:callDelayed(seconds, Missile.destroy, self)
         elseif self.timedLifeTask then
-            TimerQueue:cancel(self.timedLifeTask)
+            self.timedLifeTask:disable()
         end
     end
 
